@@ -1,7 +1,7 @@
 {
   "repo": "",
   "prima_colectare": "",
-  "ultima_actualizare": "2026-08-09T06:57:36Z",
+  "ultima_actualizare": "2026-08-10T07:43:06Z",
   "zilnic": {
     "2026-03-01": {
       "clones_total": 5,
@@ -4594,7 +4594,11 @@
           "vizite": 5,
           "vizitatori_unici": 2
         }
-      ]
+      ],
+      "clones_total": 10,
+      "clones_unice": 5,
+      "views_total": 2,
+      "views_unice": 2
     },
     "2026-08-09": {
       "stars": 5,
@@ -4611,6 +4615,33 @@
           "sursa": "github.com",
           "vizite": 8,
           "vizitatori_unici": 3
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 7,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 4,
+      "clones_unice": 2,
+      "views_total": 3,
+      "views_unice": 3
+    },
+    "2026-08-10": {
+      "stars": 5,
+      "forks": 1,
+      "watchers": 0,
+      "open_issues": 0,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 12,
+          "vizitatori_unici": 8
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 12,
+          "vizitatori_unici": 7
         },
         {
           "sursa": "chatgpt.com",
