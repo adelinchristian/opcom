@@ -15,8 +15,22 @@ from .const import OPCOM_CSV_URL, OpcomSettings
 
 _LOGGER = logging.getLogger(__name__)
 
-_USER_AGENT = "HomeAssistant-OPCOM/0.1 (+https://github.com/cnecrea/opcom)"
+_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
 _TIMEOUT = ClientTimeout(total=30)
+
+
+def build_request_headers() -> dict[str, str]:
+    """Return a browser-like header set accepted by the OPCOM CSV endpoint."""
+    return {
+        "User-Agent": _USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.opcom.ro/",
+        "Upgrade-Insecure-Requests": "1",
+    }
 
 
 # ----------------------------
@@ -107,16 +121,20 @@ def interval_times(day: dt.date, interval: int, res_minutes: int) -> Tuple[str, 
 async def fetch_csv(hass: HomeAssistant, day: dt.date, resolution: int, lang: str) -> str:
     url = OPCOM_CSV_URL.format(dd=day.day, mm=day.month, yyyy=day.year, lang=lang, res=resolution)
     session = async_get_clientsession(hass)
-    headers = {
-        "User-Agent": _USER_AGENT,
-        "Accept": "text/plain,text/csv,*/*",
-    }
+    headers = build_request_headers()
 
     _LOGGER.debug("OPCOM: descarc CSV (data=%s, res=%s, lang=%s).", iso_date(day), resolution, lang)
 
     try:
         async with session.get(url, headers=headers, timeout=_TIMEOUT) as resp:
-            resp.raise_for_status()
+            if resp.status != 200:
+                text_preview = (await resp.text())[:200] if resp.status < 500 else ""
+                _LOGGER.error(
+                    "OPCOM: HTTP %s la descărcarea CSV (data=%s, res=%s, lang=%s). URL=%s. Preview=%s",
+                    resp.status, iso_date(day), resolution, lang, url, text_preview,
+                )
+                resp.raise_for_status()
+
             text = await resp.text()
 
             # Mic sanity-check ca să prinzi rapid “am primit altceva decât CSV”
@@ -135,7 +153,7 @@ async def fetch_csv(hass: HomeAssistant, day: dt.date, resolution: int, lang: st
 
     except (ClientError, asyncio.TimeoutError) as e:
         raise RuntimeError(
-            f"Nu pot descărca CSV de la OPCOM (rezoluție={resolution}, dată={iso_date(day)}, lang={lang}): {e}"
+            f"Nu pot descărca CSV de la OPCOM (rezoluție={resolution}, dată={iso_date(day)}, lang={lang}, URL={url}): {e}"
         ) from e
 
 

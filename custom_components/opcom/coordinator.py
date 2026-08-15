@@ -335,9 +335,14 @@ class OpcomCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Dacă nicio zi nu a reușit, aruncăm UpdateFailed ca să semnalăm
         # coordinatorului că nu avem date valide (retry la următorul poll).
         if not days:
-            raise RuntimeError(
-                f"Niciuna din cele {self.settings.days_ahead} zile nu a putut fi descărcată."
+            error_msg = (
+                f"Niciuna din cele {self.settings.days_ahead} zile nu a putut fi descărcată. "
+                f"Verifică logurile pentru detalii. Posibile cauze: "
+                f"OPCOM este temporar indisponibil, probleme de rețea, "
+                f"sau endpoint-ul respinge cererile fără header-uri de browser."
             )
+            _LOGGER.error("OPCOM: %s", error_msg)
+            raise RuntimeError(error_msg)
 
         return {
             "source": "opcom.ro",
