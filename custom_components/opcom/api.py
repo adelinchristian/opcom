@@ -5,9 +5,11 @@ import csv
 import datetime as dt
 import logging
 import re
+import ssl
 from typing import Any, Optional, Tuple
 
 from aiohttp import ClientError, ClientTimeout
+import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -23,13 +25,20 @@ _TIMEOUT = ClientTimeout(total=30)
 
 
 def build_request_headers() -> dict[str, str]:
-    """Return a browser-like header set accepted by the OPCOM CSV endpoint."""
+    """Return a comprehensive browser-like header set accepted by the OPCOM CSV endpoint."""
     return {
         "User-Agent": _USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "ro-RO,ro;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
         "Referer": "https://www.opcom.ro/",
         "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
     }
 
 
@@ -123,10 +132,23 @@ async def fetch_csv(hass: HomeAssistant, day: dt.date, resolution: int, lang: st
     session = async_get_clientsession(hass)
     headers = build_request_headers()
 
-    _LOGGER.debug("OPCOM: descarc CSV (data=%s, res=%s, lang=%s).", iso_date(day), resolution, lang)
+    _LOGGER.debug("OPCOM: descarc CSV (data=%s, res=%s, lang=%s). Headers=%s", iso_date(day), resolution, lang, headers)
 
     try:
-        async with session.get(url, headers=headers, timeout=_TIMEOUT) as resp:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        async with session.get(url, headers=headers, timeout=_TIMEOUT, ssl=ssl_context) as resp:
+            if resp.status == 403:
+                _LOGGER.warning("OPCOM: HA session returned 403, will try standalone session")
+                raise ClientError("403 Forbidden - trying standalone")
+            
+            _LOGGER.debug(
+                "OPCOM: răspuns HTTP %s (data=%s, res=%s). Content-Type=%s",
+                resp.status, iso_date(day), resolution, resp.headers.get("content-type", "?"),
+            )
+            
             if resp.status != 200:
                 text_preview = (await resp.text())[:200] if resp.status < 500 else ""
                 _LOGGER.error(
@@ -152,6 +174,56 @@ async def fetch_csv(hass: HomeAssistant, day: dt.date, resolution: int, lang: st
             return text
 
     except (ClientError, asyncio.TimeoutError) as e:
+        _LOGGER.debug("OPCOM: HA session failed (res=%s), creating standalone session with TCPConnector: %s", resolution, e)
+        
+        # Standalone fallback with proper connector settings for TLS/SSL behavior matching curl
+        ssl_context_conn = ssl.create_default_context()
+        ssl_context_conn.check_hostname = False
+        ssl_context_conn.verify_mode = ssl.CERT_NONE
+        
+        connector = aiohttp.TCPConnector(
+            ssl=ssl_context_conn,
+            enable_cleanup_closed=True,
+            limit_per_host=10,
+            ttl_dns_cache=300,
+        )
+        
+        async with aiohttp.ClientSession(connector=connector, cookie_jar=aiohttp.CookieJar()) as standalone_session:
+            try:
+                async with standalone_session.get(url, headers=headers, timeout=_TIMEOUT) as resp:
+                    _LOGGER.debug(
+                        "OPCOM: standalone răspuns HTTP %s (data=%s, res=%s). Content-Type=%s",
+                        resp.status, iso_date(day), resolution, resp.headers.get("content-type", "?"),
+                    )
+                    
+                    if resp.status != 200:
+                        text_preview = (await resp.text())[:200] if resp.status < 500 else ""
+                        _LOGGER.error(
+                            "OPCOM: HTTP %s la descărcarea CSV (standalone, data=%s, res=%s, lang=%s). URL=%s. Preview=%s",
+                            resp.status, iso_date(day), resolution, lang, url, text_preview,
+                        )
+                        resp.raise_for_status()
+
+                    text = await resp.text()
+
+                    # Mic sanity-check ca să prinzi rapid "am primit altceva decât CSV"
+                    if not text.strip():
+                        _LOGGER.debug("OPCOM: CSV gol (data=%s, res=%s).", iso_date(day), resolution)
+                    else:
+                        first_line = text.splitlines()[0] if text.splitlines() else ""
+                        _LOGGER.debug(
+                            "OPCOM: CSV ok (data=%s, res=%s). Prima linie: %s",
+                            iso_date(day),
+                            resolution,
+                            first_line[:160],
+                        )
+
+                    return text
+            finally:
+                await connector.close()
+
+    except (ClientError, asyncio.TimeoutError) as e:
+        _LOGGER.error("OPCOM: excepție la descărcare (data=%s, res=%s): %s", iso_date(day), resolution, e, exc_info=True)
         raise RuntimeError(
             f"Nu pot descărca CSV de la OPCOM (rezoluție={resolution}, dată={iso_date(day)}, lang={lang}, URL={url}): {e}"
         ) from e
