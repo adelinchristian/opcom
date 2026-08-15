@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Final, Optional
 
-DOMAIN = "opcom"
+DOMAIN = os.environ.get("OPCOM_DOMAIN", "opcom_nolicense")
+
+USE_LICENSE: bool = str(os.environ.get("USE_LICENSE", "false")).strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+    "disabled",
+}
 
 CONF_LICENSE_KEY: Final = "license_key"
 LICENSE_DATA_KEY: Final = "opcom_license_manager"

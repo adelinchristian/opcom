@@ -28,7 +28,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN
+from .const import DOMAIN, USE_LICENSE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -140,6 +140,19 @@ class LicenseManager:
     async def async_load(self) -> None:
         """Încarcă datele de licență din storage. Se apelează o singură dată."""
         _LOGGER.debug("[OPCOM:License] Încep async_load()")
+        if not USE_LICENSE:
+            _LOGGER.warning(
+                "[OPCOM:License] USE_LICENSE=false — bypass license validation entirely"
+            )
+            now = time.time()
+            self._status_token = {
+                "status": "licensed",
+                "valid_until": now + 365 * 24 * 3600,
+            }
+            self._data["status_token"] = self._status_token
+            self._loaded = True
+            return
+
         try:
             stored = await self._store.async_load()
             self._data = dict(stored) if stored else {}
@@ -583,6 +596,8 @@ class LicenseManager:
     @property
     def is_trial_valid(self) -> bool:
         """Verifică dacă perioada de evaluare e activă (conform server)."""
+        if not USE_LICENSE:
+            return True
         return (
             self._status_token.get("status") == "trial"
             and (self._is_status_cache_valid() or self._is_within_grace_period())
@@ -602,6 +617,8 @@ class LicenseManager:
         Verifică ATÂT token-ul de activare (Ed25519) CÂT ȘI
         faptul că serverul confirmă statusul 'licensed'.
         """
+        if not USE_LICENSE:
+            return True
         token = self._data.get("activation_token")
         if not token or not isinstance(token, dict):
             return False
@@ -666,6 +683,8 @@ class LicenseManager:
         2. Perioadă de grație activă (server inaccesibil, dar status era ok) → True
         3. Fallback local: token Ed25519 valid + trial valid → True/False
         """
+        if not USE_LICENSE:
+            return True
         # 1. Serverul e sursa de adevăr (cache valid)
         if self._status_token and self._is_status_cache_valid():
             server_status = self._status_token.get("status")
@@ -740,6 +759,8 @@ class LicenseManager:
         Când cache-ul e expirat dar suntem în perioadă de grație,
         returnează ultimul status cunoscut (nu 'expired').
         """
+        if not USE_LICENSE:
+            return "licensed"
         # Dacă avem status valid de la server, îl folosim
         if self._status_token and self._is_status_cache_valid():
             server_status = self._status_token.get("status", "unlicensed")
@@ -765,6 +786,8 @@ class LicenseManager:
         Intervalul e controlat de server via `valid_until`.
         Nu mai există constantă locală LICENSE_CHECK_INTERVAL_SEC.
         """
+        if not USE_LICENSE:
+            return False
         return not self._is_status_cache_valid()
 
     @property
@@ -781,6 +804,8 @@ class LicenseManager:
         - Încercări 13+: 3600s (1 oră)
         Previne bombardarea unui server indisponibil.
         """
+        if not USE_LICENSE:
+            return 24 * 3600
         if not self._status_token:
             return 4 * 3600  # 4 ore implicit (conservative)
 
