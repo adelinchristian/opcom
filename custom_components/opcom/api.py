@@ -135,7 +135,9 @@ async def fetch_csv(hass: HomeAssistant, day: dt.date, resolution: int, lang: st
     _LOGGER.debug("OPCOM: descarc CSV (data=%s, res=%s, lang=%s). Headers=%s", iso_date(day), resolution, lang, headers)
 
     try:
-        ssl_context = ssl.create_default_context()
+        # SSLContext gol (fara create_default_context) ca sa evitam apeluri blocante
+        # (load_default_certs/set_default_verify_paths) in event loop - verificarea e oricum dezactivata.
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
         
@@ -177,7 +179,7 @@ async def fetch_csv(hass: HomeAssistant, day: dt.date, resolution: int, lang: st
         _LOGGER.debug("OPCOM: HA session failed (res=%s), creating standalone session with TCPConnector: %s", resolution, e)
         
         # Standalone fallback with proper connector settings for TLS/SSL behavior matching curl
-        ssl_context_conn = ssl.create_default_context()
+        ssl_context_conn = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ssl_context_conn.check_hostname = False
         ssl_context_conn.verify_mode = ssl.CERT_NONE
         
