@@ -2,7 +2,8 @@
   "domain": "opcom",
   "name": "OPCOM România",
   "codeowners": [
-    "@cnecrea"
+    "@cnecrea",
+    "@adelinchristian"
   ],
   "config_flow": true,
   "dependencies": [],
