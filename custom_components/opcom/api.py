@@ -239,7 +239,7 @@ def split_sections(rows: list[list[str]]) -> tuple[list[list[str]], list[list[st
     """
     Returns (summary_rows, interval_rows).
     Detectăm switch când întâlnim header-ul tabelului de intervale:
-      - PT15: "Zona de tranzactionare" ...
+      - PT15: "Zona de tranzactionare" / "Trading Zone" ...
       - PT30/60: "Interval" ...
     """
     summary: list[list[str]] = []
@@ -252,7 +252,7 @@ def split_sections(rows: list[list[str]]) -> tuple[list[list[str]], list[list[st
         r0 = (row[0] or "").strip().lower()
 
         if mode == "summary":
-            if r0 in ("zona de tranzactionare", "interval"):
+            if r0 in ("zona de tranzactionare", "trading zone", "interval"):
                 mode = "intervals"
                 intervals.append(row)
             else:
@@ -395,7 +395,7 @@ def parse_intervals(interval_rows: list[list[str]], day: dt.date, resolution: in
 
         # skip header repeats
         first = (row[0] or "").strip().lower()
-        if first in ("interval", "zona de tranzactionare"):
+        if first in ("interval", "zona de tranzactionare", "trading zone"):
             continue
 
         interval_idx: Optional[int] = None
