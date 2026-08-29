@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Final, Optional
 
-DOMAIN = os.environ.get("OPCOM_DOMAIN", "opcom_nolicense")
+DOMAIN = os.environ.get("OPCOM_DOMAIN", "opcom")
 
 USE_LICENSE: bool = str(os.environ.get("USE_LICENSE", "false")).strip().lower() not in {
     "0",
