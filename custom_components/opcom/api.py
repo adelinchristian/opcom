@@ -306,17 +306,17 @@ def header_to_map(headers: list[str]) -> dict[str, int]:
 
         if hh == "interval":
             hm["interval"] = i
-        elif "zona" in hh:
+        elif "zona" in hh or "zone" in hh:
             hm["zona"] = i
-        elif "pret" in hh:
+        elif "pret" in hh or "price" in hh:
             hm["pret"] = i
         elif "volum tranzactionat pe cumparare" in hh or "volum tranzacționat pe cumpărare" in hh:
             hm["volum_cumparare"] = i
         elif "volum tranzactionat pe vanzare" in hh or "volum tranzacționat pe vânzare" in hh:
             hm["volum_vanzare"] = i
-        elif "volum tranzactionat" in hh or "volum tranzacționat" in hh:
+        elif "volum tranzactionat" in hh or "volum tranzacționat" in hh or "volume" in hh:
             hm["volum"] = i
-        elif "rezolutie" in hh or "rezoluție" in hh:
+        elif "rezolutie" in hh or "rezoluție" in hh or "resolution" in hh:
             hm["rezolutie"] = i
 
     if "interval" not in hm or "pret" not in hm:
