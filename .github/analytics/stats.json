@@ -1,7 +1,7 @@
 {
   "repo": "",
   "prima_colectare": "",
-  "ultima_actualizare": "2026-09-08T10:46:16Z",
+  "ultima_actualizare": "2026-09-22T11:07:11Z",
   "zilnic": {
     "2026-03-01": {
       "clones_total": 5,
@@ -5608,6 +5608,544 @@
         },
         {
           "sursa": "l.facebook.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 17,
+      "clones_unice": 8,
+      "views_total": 36,
+      "views_unice": 8
+    },
+    "2026-09-09": {
+      "stars": 5,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "github.com",
+          "vizite": 53,
+          "vizitatori_unici": 19
+        },
+        {
+          "sursa": "Google",
+          "vizite": 33,
+          "vizitatori_unici": 13
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 8,
+          "vizitatori_unici": 4
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "l.facebook.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 7,
+      "clones_unice": 3,
+      "views_total": 1,
+      "views_unice": 1
+    },
+    "2026-09-10": {
+      "stars": 5,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "github.com",
+          "vizite": 52,
+          "vizitatori_unici": 19
+        },
+        {
+          "sursa": "Google",
+          "vizite": 52,
+          "vizitatori_unici": 13
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 7,
+          "vizitatori_unici": 4
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 2,
+          "vizitatori_unici": 2
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "l.facebook.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 8,
+      "clones_unice": 4,
+      "views_total": 0,
+      "views_unice": 0
+    },
+    "2026-09-11": {
+      "stars": 5,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 52,
+          "vizitatori_unici": 13
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 38,
+          "vizitatori_unici": 18
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 7,
+          "vizitatori_unici": 4
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 2,
+          "vizitatori_unici": 2
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "l.facebook.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 8,
+      "clones_unice": 3,
+      "views_total": 0,
+      "views_unice": 0
+    },
+    "2026-09-12": {
+      "stars": 5,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 51,
+          "vizitatori_unici": 13
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 34,
+          "vizitatori_unici": 16
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 6,
+          "vizitatori_unici": 4
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 2,
+          "vizitatori_unici": 2
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "l.facebook.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 9,
+      "clones_unice": 5,
+      "views_total": 5,
+      "views_unice": 3
+    },
+    "2026-09-13": {
+      "stars": 5,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 51,
+          "vizitatori_unici": 13
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 31,
+          "vizitatori_unici": 15
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 5,
+          "vizitatori_unici": 4
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 2,
+          "vizitatori_unici": 2
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "l.facebook.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 9,
+      "clones_unice": 5,
+      "views_total": 2,
+      "views_unice": 2
+    },
+    "2026-09-14": {
+      "stars": 6,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 46,
+          "vizitatori_unici": 11
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 32,
+          "vizitatori_unici": 15
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 4,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 3,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 18,
+      "clones_unice": 9,
+      "views_total": 2,
+      "views_unice": 2
+    },
+    "2026-09-15": {
+      "stars": 6,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 37,
+          "vizitatori_unici": 9
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 31,
+          "vizitatori_unici": 14
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 4,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 3,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 17,
+      "clones_unice": 8,
+      "views_total": 3,
+      "views_unice": 2
+    },
+    "2026-09-16": {
+      "stars": 6,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 33,
+          "vizitatori_unici": 6
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 24,
+          "vizitatori_unici": 13
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 3,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 7,
+      "clones_unice": 3,
+      "views_total": 3,
+      "views_unice": 3
+    },
+    "2026-09-17": {
+      "stars": 6,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 33,
+          "vizitatori_unici": 6
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 23,
+          "vizitatori_unici": 12
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 4,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 7,
+      "clones_unice": 3,
+      "views_total": 0,
+      "views_unice": 0
+    },
+    "2026-09-18": {
+      "stars": 6,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 32,
+          "vizitatori_unici": 5
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 23,
+          "vizitatori_unici": 12
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 4,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 8,
+      "clones_unice": 4,
+      "views_total": 0,
+      "views_unice": 0
+    },
+    "2026-09-19": {
+      "stars": 6,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 32,
+          "vizitatori_unici": 5
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 13,
+          "vizitatori_unici": 10
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 4,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 24,
+      "clones_unice": 14,
+      "views_total": 1,
+      "views_unice": 1
+    },
+    "2026-09-20": {
+      "stars": 6,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 32,
+          "vizitatori_unici": 5
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 13,
+          "vizitatori_unici": 10
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 4,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 19,
+      "clones_unice": 10,
+      "views_total": 4,
+      "views_unice": 2
+    },
+    "2026-09-21": {
+      "stars": 6,
+      "forks": 2,
+      "watchers": 0,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 27,
+          "vizitatori_unici": 5
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 11,
+          "vizitatori_unici": 9
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 5,
+          "vizitatori_unici": 4
+        },
+        {
+          "sursa": "copilot.microsoft.com",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        },
+        {
+          "sursa": "hubinteligent.org",
+          "vizite": 1,
+          "vizitatori_unici": 1
+        }
+      ],
+      "clones_total": 6,
+      "clones_unice": 2,
+      "views_total": 3,
+      "views_unice": 1
+    },
+    "2026-09-22": {
+      "stars": 7,
+      "forks": 2,
+      "watchers": 1,
+      "open_issues": 2,
+      "referrers": [
+        {
+          "sursa": "Google",
+          "vizite": 27,
+          "vizitatori_unici": 5
+        },
+        {
+          "sursa": "github.com",
+          "vizite": 11,
+          "vizitatori_unici": 9
+        },
+        {
+          "sursa": "chatgpt.com",
+          "vizite": 4,
+          "vizitatori_unici": 3
+        },
+        {
+          "sursa": "hubinteligent.org",
           "vizite": 1,
           "vizitatori_unici": 1
         }
