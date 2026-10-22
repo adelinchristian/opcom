@@ -52,6 +52,23 @@ from .helpers import parse_top_n_per_res
 _LOGGER = logging.getLogger(__name__)
 
 
+_ETICHETE_TIP_LICENTA = {
+    # Tipurile emise de WebAPI (LICENSE_DURATION)
+    "perpetual": ("perpetuă", "perpetual"),
+    "annual": ("anuală", "annual"),
+    "semi_annual": ("semestrială", "semi-annual"),
+    "monthly": ("lunară", "monthly"),
+}
+
+
+def _eticheta_tip_licenta(tip: str | None, is_ro: bool) -> str:
+    """Eticheta afișată pentru tipul de licență primit de la server."""
+    if not tip:
+        return "necunoscut" if is_ro else "unknown"
+    ro, en = _ETICHETE_TIP_LICENTA.get(tip, (tip, tip))
+    return ro if is_ro else en
+
+
 # ──────────────────────────────────────────────
 # Helpers de parsare
 # ──────────────────────────────────────────────
@@ -382,7 +399,7 @@ class OpcomOptionsFlow(config_entries.OptionsFlow):
         if server_status == "licensed":
             from datetime import datetime
 
-            tip = mgr.license_type or "necunoscut"
+            tip = _eticheta_tip_licenta(mgr.license_type, True)
             status_lines = [f"✅ Licență activă ({tip})"]
 
             if mgr.license_key_masked:
@@ -399,7 +416,7 @@ class OpcomOptionsFlow(config_entries.OptionsFlow):
                     mgr.license_expires_at
                 ).strftime("%d.%m.%Y %H:%M")
                 status_lines.append(f"📅 Expiră la: {exp_date}")
-            elif tip == "perpetual":
+            elif mgr.license_type == "perpetual":
                 status_lines.append("Valabilitate: nelimitată (perpetuă)")
 
             description_placeholders["license_status"] = "\n".join(
@@ -482,15 +499,7 @@ class OpcomOptionsFlow(config_entries.OptionsFlow):
                         persistent_notification,
                     )
 
-                    _LICENSE_TYPE_RO = {
-                        "monthly": "lunară",
-                        "yearly": "anuală",
-                        "perpetual": "perpetuă",
-                        "trial": "evaluare",
-                    }
-                    tip_ro = _LICENSE_TYPE_RO.get(
-                        mgr.license_type, mgr.license_type or "necunoscut"
-                    )
+                    tip_ro = _eticheta_tip_licenta(mgr.license_type, True)
 
                     persistent_notification.async_create(
                         self.hass,
@@ -505,14 +514,16 @@ class OpcomOptionsFlow(config_entries.OptionsFlow):
 
                 # Mapare erori API
                 api_error = result.get("error", "unknown_error")
+                # Codurile WebAPI /activate + erorile locale
                 error_map = {
                     "invalid_key": "license_key_invalid",
                     "already_used": "license_already_used",
                     "expired_key": "license_key_expired",
                     "fingerprint_mismatch": "license_fingerprint_mismatch",
-                    "invalid_signature": "license_server_error",
                     "network_error": "license_network_error",
-                    "server_error": "license_server_error",
+                    "http_502": "license_network_error",
+                    "http_503": "license_network_error",  # server temporar ocupat
+                    "http_504": "license_network_error",
                 }
                 errors["base"] = error_map.get(api_error, "license_server_error")
 
@@ -521,7 +532,7 @@ class OpcomOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_LICENSE_KEY): selector.TextSelector(
                     selector.TextSelectorConfig(
                         type=selector.TextSelectorType.TEXT,
-                        suffix="OPCOM-XXXX-XXXX-XXXX-XXXX",
+                        suffix="OPCM-XXXX-XXXX-XXXX-XXXX",
                     )
                 ),
             }

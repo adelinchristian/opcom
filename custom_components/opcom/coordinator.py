@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import logging
 import time
@@ -13,7 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 from homeassistant.helpers.event import async_track_point_in_time
 
-from .api import fetch_and_parse_day
+from .api import OpcomFetchError, create_opcom_session, fetch_and_parse_day
 from .const import (
     DOMAIN,
     LICENSE_DATA_KEY,
@@ -41,9 +40,20 @@ from .helpers import parse_top_n_per_res
 
 _LOGGER = logging.getLogger(__name__)
 
-# Numărul maxim de reîncercări la erori de rețea, cu backoff exponențial.
-_MAX_RETRIES = 3
-_RETRY_BASE_DELAY = 5  # secunde
+# Rezultatele PZU pentru ziua următoare apar după licitația SDAC (închidere
+# 12:00 CET, publicare în jur de 13:00). Înainte de ora asta nu are rost să cerem
+# ziua de mâine — OPCOM răspunde cu un fișier gol.
+_ORA_PUBLICARE_MAINE_CET = 12
+
+
+def _rezolutie_completa(res_obj: Any) -> bool:
+    """True dacă rezoluția are intervale și toate au preț."""
+    if not isinstance(res_obj, dict):
+        return False
+    rows = (res_obj.get("intervals") or {}).get("rows")
+    if not isinstance(rows, list) or not rows:
+        return False
+    return all(r.get("pret_lei_mwh") is not None for r in rows)
 
 
 class OpcomCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -51,13 +61,19 @@ class OpcomCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     Coordinator OPCOM: fetch + parse centralizat, date reutilizate de entități.
 
     Strategia de refresh:
-      1. update_interval (fallback) — polling regulat la scan_interval_minutes
-      2. Timer la granița intervalului cel mai fin — sincronizare exactă cu piața
-      Ambele coexistă: timer-ul asigură precizie, polling-ul asigură reziliență.
+      1. update_interval — la scan_interval_minutes descarcă DOAR ce lipsește
+         (ziua de mâine până la publicare, rezoluții eșuate). Prețurile PZU ale
+         unei zile publicate nu se mai schimbă, deci o zi completă se descarcă o
+         singură dată (înainte: 6 CSV-uri la fiecare 15 minute, chiar de două ori).
+      2. Timer la granița intervalului cel mai fin — actualizează doar stările
+         entităților (intervalul curent), fără rețea, dacă azi e deja descărcat.
+
+    La erori de rețea se păstrează zilele deja descărcate (înainte: toate
+    entitățile deveneau indisponibile).
 
     Contor monoton (_data_version):
-      Fiecare refresh reușit incrementează contorul. Entitățile îl folosesc
-      pentru invalidarea cache-ului, eliminând fragilitatea id(data).
+      Incrementat când datele se schimbă. Entitățile îl folosesc pentru
+      invalidarea cache-ului, eliminând fragilitatea id(data).
     """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -70,16 +86,24 @@ class OpcomCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._finest_resolution: int = min(self.settings.resolutions)
 
         # Contor monoton pentru invalidarea cache-ului în entități.
-        # Incrementat la fiecare refresh reușit. Nu poate produce false cache hits
+        # Incrementat când datele se schimbă. Nu poate produce false cache hits
         # (spre deosebire de id(data) care recicla adrese de memorie).
         self._data_version: int = 0
+
+        # Zilele descărcate (cheie YYYY-MM-DD, CET) — vezi _async_update_data
+        self._zile: dict[str, dict[str, Any]] = {}
+        self._indisponibil_raportat = False
+
+        # Sesiune proprie, fără cookie-uri (WAF-ul OPCOM — vezi create_opcom_session)
+        self._session = create_opcom_session(hass)
 
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=f"{DOMAIN}:{entry.entry_id}",
-            # FIX 1: scan_interval_minutes FUNCȚIONEAZĂ acum ca fallback polling.
-            # Dacă timer-ul de graniță eșuează, coordinatorul tot se actualizează.
+            # La fiecare scan_interval_minutes se descarcă doar datele lipsă
+            # (vezi _async_update_data); fără rețea când zilele sunt complete.
             update_interval=timedelta(minutes=self.settings.scan_interval_minutes),
         )
 
@@ -237,14 +261,37 @@ class OpcomCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         out["resolutions"] = res_debug
         return out
 
+    def _rezolutii_lipsa(self, cheie_zi: str) -> list[int]:
+        """Rezoluțiile configurate care nu sunt (complet) descărcate pentru ziua dată."""
+        day_obj = self._zile.get(cheie_zi) or {}
+        res_map = day_obj.get("resolutions") or {}
+        return [
+            r for r in self.settings.resolutions
+            if not _rezolutie_completa(res_map.get(str(r)))
+        ]
+
+    def _integreaza_zi(self, cheie_zi: str, day_obj: dict[str, Any]) -> bool:
+        """Adaugă rezoluțiile nou descărcate în cache. Returnează True dacă s-a schimbat ceva."""
+        noi = {
+            k: v for k, v in (day_obj.get("resolutions") or {}).items()
+            if (v.get("intervals") or {}).get("count")
+        }
+        if not noi:
+            return False  # fișier gol — ziua nu e încă publicată
+        zi = self._zile.setdefault(cheie_zi, {"date": cheie_zi, "resolutions": {}})
+        zi["resolutions"].update(noi)
+        if day_obj.get("title"):
+            zi["title"] = day_obj["title"]
+        zi["fetched_at"] = dt_util.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        return True
+
     async def _async_update_data(self) -> dict[str, Any]:
         """
-        Fetch + parse cu retry integrat (backoff exponențial).
+        Descarcă doar ce lipsește și întoarce datele din cache.
 
-        La erori de rețea, reîncearcă de până la _MAX_RETRIES ori
-        cu delay crescător. Dacă toate eșuează, aruncă UpdateFailed
-        și se bazează pe fallback polling (update_interval) pentru
-        următoarea încercare.
+        UpdateFailed numai dacă nu există nicio zi descărcată; altfel, la erori,
+        se păstrează datele existente (prețurile unei zile publicate sunt fixe).
+        HA reîncearcă la următorul update_interval (la pornire: ConfigEntryNotReady).
         """
         # Verificare licență — nu fetchuim date dacă licența/trial nu e validă
         license_mgr = self.hass.data.get(DOMAIN, {}).get(LICENSE_DATA_KEY)
@@ -253,97 +300,71 @@ class OpcomCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self.data or {}
 
         t0 = time.perf_counter()
-        last_error: Exception | None = None
-
-        for attempt in range(1, _MAX_RETRIES + 1):
-            try:
-                payload = await self._do_fetch()
-
-                # Incrementăm contorul monoton — DOAR la succes
-                self._data_version += 1
-
-                t1 = time.perf_counter()
-                _LOGGER.debug(
-                    "OPCOM: actualizare completă (%.2fs, încercare %s/%s, v%s). Zile: %s",
-                    t1 - t0, attempt, _MAX_RETRIES, self._data_version,
-                    list(payload.get("days", {}).keys()),
-                )
-                return payload
-
-            except Exception as err:
-                last_error = err
-                if attempt < _MAX_RETRIES:
-                    delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                    _LOGGER.warning(
-                        "OPCOM: eroare la încercare %s/%s: %s. Reîncerc în %s secunde.",
-                        attempt, _MAX_RETRIES, err, delay,
-                    )
-                    await asyncio.sleep(delay)
-
-        t1 = time.perf_counter()
-        _LOGGER.error(
-            "OPCOM: toate cele %s încercări au eșuat (%.2fs). Ultima eroare: %s: %s",
-            _MAX_RETRIES, t1 - t0,
-            type(last_error).__name__ if last_error else "?",
-            last_error,
-        )
-        raise UpdateFailed(
-            f"Eroare la actualizarea datelor OPCOM după {_MAX_RETRIES} încercări: "
-            f"{type(last_error).__name__}: {last_error}"
-        ) from last_error
-
-    async def _do_fetch(self) -> dict[str, Any]:
-        """Fetch efectiv (fără retry — apelat de _async_update_data)."""
         tz = dt_util.get_time_zone(OPCOM_TIMEZONE)
         now_cet = dt_util.now(tz)
         base_day = now_cet.date()
+        zile = [base_day + dt.timedelta(days=o) for o in range(self.settings.days_ahead)]
+        chei = [d.strftime("%Y-%m-%d") for d in zile]
+
+        # Zilele trecute ies din cache
+        for cheie in list(self._zile):
+            if cheie not in chei:
+                del self._zile[cheie]
+
+        erori: list[str] = []
+        schimbat = False
+        descarcate: list[str] = []
+
+        for offset, (day, cheie) in enumerate(zip(zile, chei)):
+            lipsa = self._rezolutii_lipsa(cheie)
+            if not lipsa:
+                continue
+            if offset > 0 and now_cet.hour < _ORA_PUBLICARE_MAINE_CET:
+                continue  # rezultatele pentru mâine nu sunt încă publicate
+            try:
+                day_obj = await fetch_and_parse_day(self._session, day, self.settings, lipsa)
+            except OpcomFetchError as err:
+                erori.append(f"{cheie}: {err}")
+                continue
+            if self._integreaza_zi(cheie, day_obj):
+                schimbat = True
+                descarcate.append(cheie)
+                _LOGGER.debug(
+                    "OPCOM: ziua %s descărcată. Rezumat: %s",
+                    cheie, self._extract_day_debug(self._zile[cheie]),
+                )
+
+        if erori:
+            if not self._zile:
+                if not self._indisponibil_raportat:
+                    _LOGGER.error("OPCOM: nu am putut descărca prețurile: %s", "; ".join(erori))
+                    self._indisponibil_raportat = True
+                raise UpdateFailed(f"OPCOM indisponibil: {'; '.join(erori)}")
+            if not self._indisponibil_raportat:
+                _LOGGER.warning(
+                    "OPCOM: descărcare eșuată (%s) — păstrez datele descărcate "
+                    "anterior; reîncerc la următoarea actualizare.",
+                    "; ".join(erori),
+                )
+                self._indisponibil_raportat = True
+        elif self._indisponibil_raportat:
+            _LOGGER.info("OPCOM: descărcarea funcționează din nou.")
+            self._indisponibil_raportat = False
+
+        if schimbat or self.data is None:
+            self._data_version += 1
 
         _LOGGER.debug(
-            "OPCOM: încep fetch. Data=%s (CET/CEST). Zile=%s, rezoluții=%s, limba='%s'.",
-            base_day, self.settings.days_ahead, self.settings.resolutions, self.settings.lang,
+            "OPCOM: actualizare (%.2fs, v%s). Descărcate acum: %s. În cache: %s",
+            time.perf_counter() - t0, self._data_version, descarcate or "nimic",
+            sorted(self._zile),
         )
-
-        days: dict[str, Any] = {}
-
-        for offset in range(self.settings.days_ahead):
-            day = base_day + dt.timedelta(days=offset)
-            day_key = day.strftime("%Y-%m-%d")
-
-            td0 = time.perf_counter()
-            try:
-                day_obj = await fetch_and_parse_day(self.hass, day, self.settings)
-            except Exception as err:
-                td1 = time.perf_counter()
-                _LOGGER.warning(
-                    "OPCOM: nu am putut descărca ziua %s (%.2fs, offset=%s): %s: %s. "
-                    "Senzorii pentru această zi vor afișa Unknown.",
-                    day_key, td1 - td0, offset,
-                    type(err).__name__, err,
-                )
-                # NU adăugăm ziua în dict → rows_for_day_res() returnează []
-                # → senzorii afișează None/Unknown (corect).
-                continue
-
-            days[day_key] = day_obj
-
-            td1 = time.perf_counter()
-            _LOGGER.debug(
-                "OPCOM: ziua %s gata (%.2fs). Rezumat: %s",
-                day_key, td1 - td0, self._extract_day_debug(day_obj),
-            )
-
-        # Dacă nicio zi nu a reușit, aruncăm UpdateFailed ca să semnalăm
-        # coordinatorului că nu avem date valide (retry la următorul poll).
-        if not days:
-            raise RuntimeError(
-                f"Niciuna din cele {self.settings.days_ahead} zile nu a putut fi descărcată."
-            )
 
         return {
             "source": "opcom.ro",
             "generated_at": dt_util.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             "base_date": base_day.strftime("%Y-%m-%d"),
-            "days": days,
+            "days": {k: self._zile[k] for k in chei if k in self._zile},
             "settings": {
                 "lang": self.settings.lang,
                 "resolutions": self.settings.resolutions,
@@ -362,22 +383,15 @@ class OpcomCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _get_next_boundary(self) -> dt.datetime:
         """
         Calculează următoarea graniță de interval pentru cea mai fină rezoluție.
-        Folosește timedelta pentru siguranță la tranziții DST.
+
+        Miezul nopții CET/CEST cade mereu la o oră fixă UTC, iar rezoluțiile
+        (15/30/60) divid ora → granițele sunt multipli de rezoluție în timpul UTC.
+        Calculul în UTC nu sare intervale la schimbarea orei (înainte: ora
+        repetată din octombrie nu avea granițe).
         """
-        res = self._finest_resolution
-        tz = dt_util.get_time_zone(OPCOM_TIMEZONE)
-        now_cet = dt_util.now(tz)
-
-        current_slot = now_cet.minute // res
-        slot_start_minute = current_slot * res
-        slot_start = now_cet.replace(minute=0, second=0, microsecond=0) + timedelta(minutes=slot_start_minute)
-        next_run = slot_start + timedelta(minutes=res)
-
-        # Protecție: dacă next_run e în trecut (posibil la DST fall-back), sărim la următorul.
-        if next_run <= now_cet:
-            next_run += timedelta(minutes=res)
-
-        return next_run
+        step = self._finest_resolution * 60
+        now_ts = dt_util.utcnow().timestamp()
+        return dt_util.utc_from_timestamp((int(now_ts // step) + 1) * step)
 
     def schedule_boundary_timer(self) -> None:
         """
@@ -405,7 +419,11 @@ class OpcomCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _handle_boundary_refresh(self, now: dt.datetime) -> None:
         """
-        Handler la graniță: refresh + reschedulare.
+        Handler la graniță: actualizează stările + reschedulare.
+
+        Dacă ziua curentă e deja descărcată, doar intervalul curent s-a schimbat
+        → entitățile se recalculează fără niciun apel la OPCOM. Altfel (ex. după
+        miezul nopții cu days_ahead=1, sau după o eroare) → refresh.
 
         IMPORTANT: try/finally asigură că timer-ul se reprogramează
         ÎNTOTDEAUNA, chiar dacă refresh-ul eșuează. Fără finally,
@@ -417,7 +435,11 @@ class OpcomCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsub_boundary_timer = None
 
         try:
-            await self.async_request_refresh()
+            azi = dt_util.now(dt_util.get_time_zone(OPCOM_TIMEZONE)).strftime("%Y-%m-%d")
+            if self._rezolutii_lipsa(azi):
+                await self.async_request_refresh()
+            else:
+                self.async_update_listeners()
         except Exception as err:
             _LOGGER.error("OPCOM: refresh la graniță a eșuat: %s: %s", type(err).__name__, err)
         finally:

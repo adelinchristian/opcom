@@ -7,16 +7,42 @@ import logging
 import re
 from typing import Any, Optional, Tuple
 
-from aiohttp import ClientError, ClientTimeout
+from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout, DummyCookieJar
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.util import dt as dt_util
 
-from .const import OPCOM_CSV_URL, OpcomSettings
+from .const import OPCOM_CSV_URL, OPCOM_TIMEZONE, OpcomSettings
 
 _LOGGER = logging.getLogger(__name__)
 
-_USER_AGENT = "HomeAssistant-OPCOM/0.1 (+https://github.com/cnecrea/opcom)"
+_USER_AGENT = "HomeAssistant-OPCOM/2.3 (+https://github.com/cnecrea/opcom)"
 _TIMEOUT = ClientTimeout(total=30)
+
+
+class OpcomFetchError(RuntimeError):
+    """Descărcarea unui CSV OPCOM a eșuat (`status` = codul HTTP, None la erori de rețea)."""
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def create_opcom_session(hass: HomeAssistant) -> ClientSession:
+    """Sesiune HTTP dedicată OPCOM, FĂRĂ cookie-uri.
+
+    opcom.ro e în spatele unui WAF (Barracuda) care setează la fiecare răspuns
+    cookie-uri criptate (BNES_*, HASH_*). aiohttp le retrimite cu valoarea între
+    ghilimele (conțin „/", „+", „="), iar WAF-ul răspunde cu 403 la TOATE cererile
+    următoare, cât timp cookie-urile sunt valabile (2 ore). Cu sesiunea partajată
+    a Home Assistant integrarea mergea doar la primul refresh după pornire
+    (issues #40, #46, #58); curl nu păstrează cookie-uri, de aceea lui îi mergea.
+    Exporturile CSV nu au nevoie de sesiune, deci nu păstrăm niciun cookie.
+
+    Creată în timpul setup-ului unei intrări, sesiunea e închisă automat de HA
+    la descărcarea intrării.
+    """
+    return async_create_clientsession(hass, cookie_jar=DummyCookieJar())
 
 
 # ----------------------------
@@ -95,18 +121,28 @@ def parse_title_from_csv(text: str) -> Optional[str]:
 
 
 def interval_times(day: dt.date, interval: int, res_minutes: int) -> Tuple[str, str]:
-    start = dt.datetime.combine(day, dt.time(0, 0)) + dt.timedelta(minutes=(interval - 1) * res_minutes)
+    """Ora (CET/CEST) de început și de sfârșit a intervalului.
+
+    Calculul se face în UTC: în zilele cu schimbarea orei intervalele OPCOM curg
+    continuu (ex. 25.10: intervalul 13 PT15 începe la 02:00 CET, după 02:45 CEST).
+    """
+    tz = dt_util.get_time_zone(OPCOM_TIMEZONE)
+    start = dt.datetime.combine(day, dt.time(0), tzinfo=tz).astimezone(dt.timezone.utc)
+    start += dt.timedelta(minutes=(interval - 1) * res_minutes)
     end = start + dt.timedelta(minutes=res_minutes)
-    return start.strftime("%Y-%m-%d %H:%M"), end.strftime("%Y-%m-%d %H:%M")
+    return (
+        start.astimezone(tz).strftime("%Y-%m-%d %H:%M"),
+        end.astimezone(tz).strftime("%Y-%m-%d %H:%M"),
+    )
 
 
 # ----------------------------
 # Fetch (async)
 # ----------------------------
 
-async def fetch_csv(hass: HomeAssistant, day: dt.date, resolution: int, lang: str) -> str:
+async def fetch_csv(session: ClientSession, day: dt.date, resolution: int, lang: str) -> str:
+    """Descarcă exportul CSV. Un răspuns gol înseamnă că ziua nu e încă publicată."""
     url = OPCOM_CSV_URL.format(dd=day.day, mm=day.month, yyyy=day.year, lang=lang, res=resolution)
-    session = async_get_clientsession(hass)
     headers = {
         "User-Agent": _USER_AGENT,
         "Accept": "text/plain,text/csv,*/*",
@@ -134,8 +170,9 @@ async def fetch_csv(hass: HomeAssistant, day: dt.date, resolution: int, lang: st
             return text
 
     except (ClientError, asyncio.TimeoutError) as e:
-        raise RuntimeError(
-            f"Nu pot descărca CSV de la OPCOM (rezoluție={resolution}, dată={iso_date(day)}, lang={lang}): {e}"
+        raise OpcomFetchError(
+            f"Nu pot descărca CSV de la OPCOM (rezoluție={resolution}, dată={iso_date(day)}, lang={lang}): {e}",
+            e.status if isinstance(e, ClientResponseError) else None,
         ) from e
 
 
@@ -371,9 +408,14 @@ def parse_opcom_csv(text: str, day: dt.date, resolution: int) -> dict[str, Any]:
 # Public API used by coordinator
 # ----------------------------
 
-async def fetch_and_parse_day(hass: HomeAssistant, day: dt.date, settings: OpcomSettings) -> dict[str, Any]:
+async def fetch_and_parse_day(
+    session: ClientSession,
+    day: dt.date,
+    settings: OpcomSettings,
+    resolutions: list[int] | None = None,
+) -> dict[str, Any]:
     """
-    Descarcă și parsează pentru o zi, pe toate rezoluțiile cerute.
+    Descarcă și parsează pentru o zi rezoluțiile cerute (implicit toate cele configurate).
     Returnează:
       {
         "date": "YYYY-MM-DD",
@@ -385,7 +427,7 @@ async def fetch_and_parse_day(hass: HomeAssistant, day: dt.date, settings: Opcom
         }
       }
     """
-    resolutions = settings.resolutions
+    resolutions = list(resolutions or settings.resolutions)
     lang = settings.lang
 
     day_obj: dict[str, Any] = {
@@ -406,15 +448,18 @@ async def fetch_and_parse_day(hass: HomeAssistant, day: dt.date, settings: Opcom
     )
 
     failed_resolutions: list[int] = []
+    last_fetch_error: OpcomFetchError | None = None
 
     for res in resolutions:
         try:
-            csv_text = await fetch_csv(hass, day, res, lang)
-        except Exception as err:
-            _LOGGER.warning(
-                "OPCOM: fetch CSV eșuat (data=%s, res=%s): %s: %s. "
-                "Rezoluția va lipsi din date.",
-                iso_date(day), res, type(err).__name__, err,
+            csv_text = await fetch_csv(session, day, res, lang)
+        except OpcomFetchError as err:
+            # Debug: coordinatorul raportează o singură dată indisponibilitatea
+            # (înainte: câte un warning per rezoluție, la fiecare 15 minute).
+            last_fetch_error = err
+            _LOGGER.debug(
+                "OPCOM: fetch CSV eșuat (data=%s, res=%s): %s",
+                iso_date(day), res, err,
             )
             failed_resolutions.append(res)
             continue
@@ -438,14 +483,15 @@ async def fetch_and_parse_day(hass: HomeAssistant, day: dt.date, settings: Opcom
         day_obj["resolutions"][str(res)] = parsed
 
     # Dacă TOATE rezoluțiile au eșuat, aruncăm eroare ca să semnalăm eșecul
-    # complet al zilei. coordinator._do_fetch va face continue (izolare per-zi).
+    # complet al zilei. Coordinatorul păstrează datele deja descărcate.
     if len(failed_resolutions) == len(resolutions):
-        raise RuntimeError(
-            f"Toate rezoluțiile ({resolutions}) au eșuat pentru ziua {iso_date(day)}."
+        raise OpcomFetchError(
+            f"Toate rezoluțiile ({resolutions}) au eșuat pentru ziua {iso_date(day)}.",
+            last_fetch_error.status if last_fetch_error else None,
         )
 
     if failed_resolutions:
-        _LOGGER.warning(
+        _LOGGER.debug(
             "OPCOM: ziua %s — rezoluții eșuate: %s, reușite: %s.",
             iso_date(day),
             failed_resolutions,

@@ -54,22 +54,41 @@ def rows_for_day_res(data: dict[str, Any], day_k: str, res: int) -> list[dict[st
     return rows if isinstance(rows, list) else []
 
 
+def opcom_midnight_utc(day: dt.date) -> dt.datetime:
+    """Începutul zilei de livrare `day` (00:00 CET/CEST), în UTC."""
+    tz = dt_util.get_time_zone(OPCOM_TIMEZONE)
+    return dt.datetime.combine(day, dt.time(0), tzinfo=tz).astimezone(dt.timezone.utc)
+
+
 def current_interval_index(hass: HomeAssistant, res_minutes: int) -> int:
     """
-    Calculează indexul intervalului curent (1-based) pe baza orei CET/CEST.
+    Calculează indexul intervalului curent (1-based) al zilei de livrare CET/CEST.
 
-    Clamped la [1, max_intervals_per_day] — protecție la edge-case
-    (ex: microsecundele de la miezul nopții înainte de tick la ziua nouă).
+    OPCOM numerotează intervalele în ordine de la 00:00: în ziua cu ora în plus
+    (octombrie) sunt 100 de intervale PT15 / 25 PT60, în cea cu ora lipsă (martie)
+    92 / 23. Indexul vine deci din timpul scurs efectiv de la miezul nopții, nu
+    din ora afișată de ceas (înainte: după 03:00, în zilele cu schimbarea orei,
+    prețul „acum" era al intervalului de acum o oră / peste o oră).
+
+    Clamped la [1, max_intervals_per_day] — protecție la edge-case.
     """
-    now_cet = _opcom_now(hass)
-    minutes = now_cet.hour * 60 + now_cet.minute
-    idx = int((minutes // res_minutes) + 1)
-    return min(idx, max_intervals_per_day(res_minutes))
+    now = dt_util.utcnow()
+    day = now.astimezone(dt_util.get_time_zone(OPCOM_TIMEZONE)).date()
+    minutes = int((now - opcom_midnight_utc(day)).total_seconds() // 60)
+    idx = minutes // res_minutes + 1
+    return max(1, min(idx, max_intervals_per_day(res_minutes, day)))
 
 
-def max_intervals_per_day(res_minutes: int) -> int:
-    """Returnează numărul total de intervale pe zi pentru o rezoluție dată."""
-    return 24 * 60 // res_minutes
+def max_intervals_per_day(res_minutes: int, day: dt.date | None = None) -> int:
+    """Numărul de intervale ale zilei de livrare (implicit azi, CET/CEST).
+
+    96/48/24 pentru PT15/PT30/PT60; 100/50/25 sau 92/46/23 în zilele cu
+    schimbarea orei.
+    """
+    if day is None:
+        day = dt_util.now(dt_util.get_time_zone(OPCOM_TIMEZONE)).date()
+    seconds = (opcom_midnight_utc(day + dt.timedelta(days=1)) - opcom_midnight_utc(day)).total_seconds()
+    return int(seconds // 60) // res_minutes
 
 
 def find_row_by_interval(

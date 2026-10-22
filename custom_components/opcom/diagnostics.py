@@ -10,8 +10,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
+import datetime as dt
+
 from .const import DOMAIN, LICENSE_DATA_KEY
 from .coordinator import OpcomCoordinator
+from .helpers import max_intervals_per_day
 
 
 def _summarize_day(day_key: str, day_obj: Any) -> dict[str, Any]:
@@ -38,6 +41,7 @@ def _summarize_day(day_key: str, day_obj: Any) -> dict[str, Any]:
     result: dict[str, Any] = {
         "Zi": day_key,
         "Titlu": title,
+        "Descarcat la (UTC)": day_obj.get("fetched_at", "—"),
     }
 
     for res_key, res_obj in sorted(resolutions.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 0):
@@ -77,8 +81,11 @@ def _summarize_day(day_key: str, day_obj: Any) -> dict[str, Any]:
         else:
             res_info = "fara intervale"
 
-        # Verifică completitudinea
-        expected = 24 * 60 // int(res_key) if res_key.isdigit() and int(res_key) > 0 else None
+        # Verifică completitudinea (92/100 de intervale PT15 în zilele cu schimbarea orei)
+        try:
+            expected = max_intervals_per_day(int(res_key), dt.date.fromisoformat(day_key))
+        except ValueError:
+            expected = None
         if expected and nr_intervale < expected:
             res_info += f" (lipsa {expected - nr_intervale} din {expected})"
 
@@ -200,7 +207,8 @@ async def async_get_config_entry_diagnostics(
     license_mgr = hass.data.get(DOMAIN, {}).get(LICENSE_DATA_KEY)
     if license_mgr:
         license_section = {
-            "fingerprint": license_mgr.fingerprint,
+            # Doar prefixul — fingerprint-ul complet identifică instalarea
+            "fingerprint": f"{license_mgr.fingerprint[:16]}...",
             "status": license_mgr.status,
             "license_key": license_mgr.license_key_masked,
             "is_valid": license_mgr.is_valid,

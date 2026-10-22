@@ -109,7 +109,7 @@ class OpcomPriceNowSensor(_OpcomBaseSensor):
     @property
     def native_value(self) -> Optional[float]:
         if not self._license_valid:
-            return "Licență necesară"
+            return None  # senzor numeric — un text ar da eroare la scrierea stării
 
         data = self.coordinator.data or {}
         dk = day_key(self.coordinator.hass, 0)
@@ -166,7 +166,7 @@ class OpcomPriceNextSensor(_OpcomBaseSensor):
     @property
     def native_value(self) -> Optional[float]:
         if not self._license_valid:
-            return "Licență necesară"
+            return None  # senzor numeric — un text ar da eroare la scrierea stării
 
         data = self.coordinator.data or {}
         idx = current_interval_index(self.coordinator.hass, self.res)
@@ -286,7 +286,7 @@ class OpcomWindowsSensor(_OpcomBaseSensor):
     @property
     def native_value(self) -> Optional[float]:
         if not self._license_valid:
-            return "Licență necesară"
+            return None  # senzor numeric — un text ar da eroare la scrierea stării
 
         windows = self._get_windows()
         if not windows:
@@ -386,7 +386,7 @@ class OpcomRemainingIntervalsSensor(_OpcomBaseSensor):
     @property
     def native_value(self) -> Optional[int]:
         if not self._license_valid:
-            return "Licență necesară"
+            return None  # senzor numeric — un text ar da eroare la scrierea stării
 
         remaining = self._get_remaining()
         return len(remaining)
@@ -434,7 +434,7 @@ class OpcomPercentileSensor(_OpcomBaseSensor):
     @property
     def native_value(self) -> Optional[float]:
         if not self._license_valid:
-            return "Licență necesară"
+            return None  # senzor numeric — un text ar da eroare la scrierea stării
 
         data = self.coordinator.data or {}
         dk = day_key(self.coordinator.hass, 0)
@@ -494,7 +494,7 @@ class OpcomAllPricesSensor(_OpcomBaseSensor):
     @property
     def native_value(self) -> Optional[float]:
         if not self._license_valid:
-            return "Licență necesară"
+            return None  # senzor numeric — un text ar da eroare la scrierea stării
 
         dk = day_key(self.coordinator.hass, self.day_offset)
         rows = rows_for_day_res(self.coordinator.data or {}, dk, self.res)
@@ -555,8 +555,10 @@ class LicentaNecesaraSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_licenta_{entry.entry_id}"
         self._attr_name = "Licență necesară"
         self._attr_icon = "mdi:license"
-        # OBLIGATORIU: entity_id explicit — pattern consistent între integrări
-        self.entity_id = f"sensor.{DOMAIN}_licenta_{entry.entry_id}"
+        # OBLIGATORIU: entity_id explicit — pattern consistent între integrări.
+        # Litere mici: entry_id e un ULID cu majuscule, iar HA respinge din 2027.2
+        # entity_id-urile invalide (până atunci le normalizează la fel, cu litere mici).
+        self.entity_id = f"sensor.{DOMAIN}_licenta_{entry.entry_id.lower()}"
 
     @property
     def device_info(self) -> DeviceInfo:
