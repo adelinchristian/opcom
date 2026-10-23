@@ -14,7 +14,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, LICENSE_DATA_KEY
+from .const import DOMAIN, LICENSE_DATA_KEY, USE_LICENSE
 from .coordinator import OpcomCoordinator
 from .helpers import (
     current_interval_index,
@@ -43,6 +43,8 @@ _LOGGER = logging.getLogger(__name__)
 # ─── Helper verificare licență (funcție standalone) ───────────────────────
 def _is_license_valid(hass: HomeAssistant) -> bool:
     """Verificare real-time a licenței."""
+    if not USE_LICENSE:
+        return True
     mgr = hass.data.get(DOMAIN, {}).get(LICENSE_DATA_KEY)
     if mgr is None:
         return False
